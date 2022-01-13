@@ -1,0 +1,24 @@
+version: '3.3'
+
+services:
+    post-crud-server:
+        container_name: fastapi_server
+        build: ./
+        environment:
+            DATABASE_URL: postgres://badrri:secret123@postgres:5432/fastapi-db      
+        volumes:
+            - ./:/usr/src/fastapi-post-crud
+        working_dir: /usr/src/fastapi-post-crud
+        command: bash -c "uvicorn app.main:app --host 0.0.0.0 --port 8000 --reload"
+        ports:
+            - "8000:8000"
+    postgres:
+        # build: ./postgres
+        image: postgres
+        ports:
+            - "5432:5432"
+        environment:
+            POSTGRES_USER: badrri
+            POSTGRES_PASSWORD: secret123
+            POSTGRES_DB: fastapi-db
+            POSTGRES_HOST: postgres
