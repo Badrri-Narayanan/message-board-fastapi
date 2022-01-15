@@ -4,6 +4,7 @@ from fastapi import FastAPI, status, HTTPException
 import psycopg2
 from psycopg2.extras import RealDictCursor
 import time
+import ctypes
 
 app = FastAPI()
 
@@ -83,3 +84,14 @@ def update_message(message_id: int, message_info: Message):
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND,
                             detail=f'message with id {message_id} is not found')
     return {"data": updated_message}
+
+
+@app.get("/factorial/{num}")
+def find_factorial(num: int):
+    c_module = ctypes.CDLL("./app/lib_factorial.so")
+    c_module.factorial.argtypes = [ctypes.c_int]
+    c_module.factorial.restype = ctypes.c_long
+    result = f'Factorial of {num} = {c_module.factorial(num)}'
+    return {"result": result}
+
+
