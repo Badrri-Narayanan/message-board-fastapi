@@ -1,65 +1,71 @@
-from typing import Optional
-from pydantic import BaseModel
-from fastapi import FastAPI, status, HTTPException
+from fastapi import FastAPI, status, HTTPException, Depends
+import ctypes
+from . import models, schemas
+from .database import engine, get_db
+from sqlalchemy.orm import Session
+
+models.Base.metadata.create_all(bind=engine)
 
 app = FastAPI()
 
 
-class Message(BaseModel):
-    title: str
-    content: str
-    id: Optional[int] = None
-
-
-messages = [
-    {"id": 1, "title": "demo1", "content": "this is demo message 1"},
-    {"id": 2, "title": "demo2", "content": "this is demo message 2"},
-]
-
 @app.get("/messages")
-def get_all_messages():
-    return {"data": messages}
+def get_all_messages(db: Session = Depends(get_db)):
+    all_messages = db.query(models.Message).all()
+    return {"data": all_messages}
 
 
 @app.get("/messages/{message_id}")
-def get_message_by_id(message_id: int):
-    if message_id > len(messages) or message_id < 1:
+def get_message_by_id(message_id: int, db: Session = Depends(get_db)):
+    retrieved_message = db.query(models.Message).filter(models.Message.id == message_id).first()
+    if not retrieved_message:
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND,
                             detail=f'message with id {message_id} is not found')
-    return {"data": [p for p in messages if p["id"] == message_id]}
+    return {"data": retrieved_message}
 
 
 @app.post("/messages", status_code=status.HTTP_201_CREATED)
-def create_message(message: Message):
-    new_message = message.dict()
-    new_message["id"] = len(messages)+1
-    messages.append(new_message)
+def create_message(message: schemas.Message, db: Session = Depends(get_db)):
+    new_message = models.Message(**message.dict())
+    db.add(new_message)
+    db.commit()
+    db.refresh(new_message)
     return {"data": new_message}
 
 
-def find_index_of_message(id):
-    for i, p in enumerate(messages):
-        if p["id"] == id:
-            return i
-    return -1
-
-
 @app.delete("/messages/{message_id}", status_code=status.HTTP_204_NO_CONTENT)
-def delete_message_by_id(message_id: int):
-    index = find_index_of_message(message_id)
-    if index == -1:
+def delete_message_by_id(message_id: int, db: Session = Depends(get_db)):
+    deleted_message = db.query(models.Message).filter(models.Message.id == message_id).first()
+    if not deleted_message:
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND,
                             detail=f'message with id {message_id} is not found')
-    messages.pop(index)
+    db.delete(deleted_message)
+    db.commit()
     return {"data": f'message with id {message_id} was deleted'}
 
 
 @app.put("/messages/{message_id}")
-def update_message(message_id: int, message_info: Message):
-    index = find_index_of_message(message_id)
-    if index == -1:
+def update_message(message_id: int, message_info: schemas.Message, db: Session = Depends(get_db)):
+    update_query = db.query(models.Message).filter(models.Message.id == message_id)
+    updated_message = update_query.first()
+    message_info.id = message_id
+
+    if not updated_message:
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND,
                             detail=f'message with id {message_id} is not found')
-    messages[index]["title"] = message_info.title
-    messages[index]["content"] = message_info.content
-    return {"data": "message update successfully"}
+    update_query.update(message_info.dict(), synchronize_session=False)
+    db.commit()
+    db.refresh(updated_message)
+
+    return {"data": updated_message}
+
+
+@app.get("/factorial/{num}")
+def find_factorial(num: int):
+    c_module = ctypes.CDLL("./app/lib_factorial.so")
+    c_module.factorial.argtypes = [ctypes.c_int]
+    c_module.factorial.restype = ctypes.c_long
+    result = f'Factorial of {num} = {c_module.factorial(num)}'
+    return {"result": result}
+
+
