@@ -5,11 +5,13 @@ services:
         container_name: fastapi_server
         build: ./
         environment:
-            DATABASE_URL: postgres://badrri:secret123@postgres:5432/fastapi-db      
+            DATABASE_URL: postgresql://badrri:secret123@postgres:5432/fastapi-db      
         volumes:
             - ./:/usr/src/fastapi-post-crud
         working_dir: /usr/src/fastapi-post-crud
-        command: bash -c "uvicorn app.main:app --host 0.0.0.0 --port 8000 --reload"
+        links:
+            - postgres
+        command: bash -c "cd app;cc -fPIC -shared -o lib_factorial.so factorial.c;cd ..; uvicorn app.main:app --host 0.0.0.0 --port 8000 --reload"
         ports:
             - "8000:8000"
     postgres:
